@@ -1,89 +1,63 @@
 using UnityEngine;
-using System.Collections;
 
 public class PlayerMovementPlat : MonoBehaviour
 {
-    public float speed = 5f;
-    public float jumpForce = 8f;
-    private float knockbackForce = 10f;
-    private float invincibleTime = 0.5f;
-    private float lastHorizontal = 1f;
+    [Header("Movimento")]
+    public float moveSpeed = 5f;       // velocidade normal
+    public float runSpeed = 8f;        // velocidade correndo
+    private float currentSpeed;
 
-    private SpriteRenderer spriteRenderer;
-    private Color originalColor;
-    private Rigidbody2D rb;
-    public ParticleSystem particleHit; // !
-    public PlayerHealth health; // !
-
-    private bool canTakeDamage = true;
+    [Header("Pulo")]
+    public float jumpForce = 10f;
     private bool isGrounded;
-    private bool isKnockback;
 
-    public void Start()
+    [Header("Checagem de chão")]
+    public Transform groundCheck;      // empty object embaixo do player
+    public float groundRadius = 0.2f;
+    public LayerMask groundLayer;
+
+    private Rigidbody2D rb;
+
+    void Start()
     {
         rb = GetComponent<Rigidbody2D>();
-        spriteRenderer = GetComponent<SpriteRenderer>();
-        originalColor = spriteRenderer.color;
-        health = FindAnyObjectByType<PlayerHealth>(); // !
     }
 
-    public void Update()
+    void Update()
     {
-        if (!isKnockback)
+        // --- MOVIMENTO HORIZONTAL ---
+        float moveInput = Input.GetAxisRaw("Horizontal");
+
+        // checa se está correndo (Shift Esquerdo pressionado)
+        if (Input.GetKey(KeyCode.LeftShift))
+            currentSpeed = runSpeed;
+        else
+            currentSpeed = moveSpeed;
+
+        rb.velocity = new Vector2(moveInput * currentSpeed, rb.velocity.y);
+
+        // --- PULO ---
+        isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundRadius, groundLayer);
+
+        if (isGrounded && Input.GetButtonDown("Jump"))
         {
-            float move = Input.GetAxisRaw("Horizontal");
-            if (move != 0)
-                lastHorizontal = move;
-
-            rb.linearVelocity = new Vector2(move * speed, rb.linearVelocity.y);
-
-            if (Input.GetButtonDown("Jump") && isGrounded)
-            {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-                isGrounded = false;
-            }
+            rb.velocity = new Vector2(rb.velocity.x, jumpForce);
         }
+
+        // --- FLIPAR SPRITE (virar personagem) ---
+        if (moveInput > 0)
+            transform.localScale = new Vector3(1, 1, 1);
+        else if (moveInput < 0)
+            transform.localScale = new Vector3(-1, 1, 1);
     }
 
-    public void OnCollisionEnter2D(Collision2D collision)
+    // visualizar raio do groundCheck
+    void OnDrawGizmosSelected()
     {
-        if (collision.collider.CompareTag("Ground")) // !
+        if (groundCheck != null)
         {
-            isGrounded = true;
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(groundCheck.position, groundRadius);
         }
-        if (collision.collider.CompareTag("Spike") && canTakeDamage)
-        {
-            particleHit.Play();
-            Vector2 knockDir = new Vector2(-Mathf.Sign(lastHorizontal), 0.5f);
-            health.TakeDamage(5);
-            StartCoroutine(ReactToSpike(knockDir));
-        }
-        if (collision.collider.CompareTag("Enemy") && canTakeDamage) // !
-        {
-            particleHit.Play();
-            Vector2 knockDir = new Vector2(-Mathf.Sign(lastHorizontal), 0.5f);
-            health.TakeDamage(5);
-            StartCoroutine(ReactToSpike(knockDir));
-        }
-    }
-
-    private IEnumerator ReactToSpike(Vector2 knockDir)
-    {
-        canTakeDamage = false;
-        isKnockback = true;
-
-        spriteRenderer.color = Color.white;
-        CameraShake.Instance.Shake(0.2f, 0.3f);
-
-        rb.linearVelocity = Vector2.zero;
-        rb.AddForce(knockDir * knockbackForce, ForceMode2D.Impulse);
-
-        yield return new WaitForSeconds(0.2f);
-
-        isKnockback = false;
-        spriteRenderer.color = originalColor;
-
-        yield return new WaitForSeconds(invincibleTime);
-        canTakeDamage = true;
     }
 }
